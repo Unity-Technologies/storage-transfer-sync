@@ -76,19 +76,26 @@ def list_ops(project_id, filter_source, filter_sink, delete_jobs):
         )
 
     print('-'*70)
-    print('Found %d successful and %d in-progress of %d operations' % (
-        success, in_progress, operations))
+    print('Matched %d transfers: %d successful, %d in-progress' % (
+        operations, success, in_progress
+    ))
     if total['bytesFoundFromSource'] > 0:
-        print('Copied %4.1f%% bytes (%d failed, %d skipped)' % (
-            float(total['bytesCopiedToSink']) / total['bytesFoundFromSource'] * 100,
-            total['bytesFromSourceFailed'],
-            total['bytesFromSourceSkippedBySync']
+        copied = total['bytesCopiedToSink']
+        found = total['bytesFoundFromSource']
+        print('Copied %4.1f%% bytes: %s / %s, %s failed, %s skipped' % (
+            float(copied) / found * 100,
+            sizeof_fmt(copied), sizeof_fmt(found),
+            sizeof_fmt(total['bytesFromSourceFailed']),
+            sizeof_fmt(total['bytesFromSourceSkippedBySync'])
         ))
     if total['objectsFoundFromSource'] > 0:
-        print('Found %4.1f%% objects (%d failed, %d skipped)' % (
-            float(total['objectsCopiedToSink']) / total['objectsFoundFromSource'] * 100,
-            total['objectsFromSourceFailed'],
-            total['objectsFromSourceSkippedBySync']
+        copied = total['objectsCopiedToSink']
+        found = total['objectsFoundFromSource']
+        print('Found %4.1f%% objects: %s / %s, %s failed, %s skipped' % (
+            float(copied) / found * 100,
+            sizeof_fmt(copied, '', False), sizeof_fmt(found, '', False),
+            sizeof_fmt(total['objectsFromSourceFailed'], '', False),
+            sizeof_fmt(total['objectsFromSourceSkippedBySync'], '', False)
         ))
 
 def filtered(spec, source, sink):
@@ -107,6 +114,22 @@ def delete_job(storagetransfer, project_id, job_name):
     request = storagetransfer.transferJobs().patch(jobName=job_name, body=update_transfer_job)
     response = request.execute()
     pprint(response)
+
+def sizeof_fmt(num, suffix='B', binary=True):
+    units = ['','K','M','G','T','P','E','Z','Y']
+    if binary:
+        base = 1024
+        units = [u if u == '' else u+'i' for u in units]
+    else:
+        base = 1000
+    for unit in units:
+        if abs(num) < base:
+            break
+        num /= base
+    if num == 0.0:
+        return '0'+suffix
+    return "%.1f%s%s" % (num, unit, suffix)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
