@@ -22,7 +22,7 @@ import googleapiclient.discovery
 
 
 def main(description, project_id, kickoff_datetime, transfer_stop_datetime,
-         elaspsed_last_modification, source_bucket, sink_bucket, include_prefix):
+         elapsed_last_modification, source_bucket, sink_bucket, include_prefix):
     """Create a transfer from the Google Cloud Storage to Google Cloud Storage"""
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
@@ -56,10 +56,10 @@ def main(description, project_id, kickoff_datetime, transfer_stop_datetime,
             },
             'transferOptions': {
                 'deleteObjectsFromSourceAfterTransfer': 'false',
-                'overwriteObjectsAlreadyExistingInSink': 'true'
+                'overwriteObjectsAlreadyExistingInSink': 'false'
             },
             'objectConditions': {
-                'minTimeElapsedSinceLastModification': '{}s'.format(elaspsed_last_modification),
+                'minTimeElapsedSinceLastModification': '{}s'.format(elapsed_last_modification),
                 'includePrefixes': [ include_prefix ],
             }
         }
@@ -92,6 +92,7 @@ if __name__ == '__main__':
     sink_bucket = args.sink_bucket
     kickoff_delay_minutes = int(args.kickoff_delay_minutes)
     transfer_stop_minutes = int(args.transfer_stop_minutes)
+    elapsed_last_modification = args.elapsed_last_modification
     kickoff_datetime = now + datetime.timedelta(minutes=kickoff_delay_minutes)
     include_prefix = args.include_prefix
     transfer_stop_datetime = kickoff_datetime + datetime.timedelta(minutes=transfer_stop_minutes)
@@ -101,7 +102,7 @@ if __name__ == '__main__':
         project_id,
         kickoff_datetime,
         transfer_stop_datetime,
-        elaspsed_last_modification,
+        elapsed_last_modification,
         source_bucket,
         sink_bucket,
         include_prefix)

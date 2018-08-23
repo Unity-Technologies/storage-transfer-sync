@@ -23,7 +23,7 @@ import googleapiclient.discovery
 
 def main(description, project_id, kickoff_datetime, transfer_stop_datetime,
          elapsed_last_modification, aws_access_key_id, aws_secret_access_key,
-         source_bucket, sink_bucket, include_prefix):
+         source_bucket, sink_bucket, include_prefix, exclude_prefix):
     """Create a transfer from the AWS to Google Cloud Storage"""
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
@@ -61,11 +61,12 @@ def main(description, project_id, kickoff_datetime, transfer_stop_datetime,
             },
             'transferOptions': {
                 'deleteObjectsFromSourceAfterTransfer': 'false',
-                'overwriteObjectsAlreadyExistingInSink': 'true'
+                'overwriteObjectsAlreadyExistingInSink': 'false'
             },
             'objectConditions': {
                 'minTimeElapsedSinceLastModification': '{}s'.format(elapsed_last_modification),
                 'includePrefixes': [ include_prefix ],
+                'excludePrefixes': [ exclude_prefix ],
             }
         }
     }
@@ -85,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--source-bucket', help='Source bucket name.')
     parser.add_argument('--sink-bucket', help='Sink bucket name.')
     parser.add_argument('--include-prefix', help='Include Prefix for the Transfer.')
+    parser.add_argument('--exclude-prefix', help='Exclude Prefix for the Transfer.')
     parser.add_argument('--transfer-stop-minutes', help='Minutes to Stop Transfer Job after Kickoff.')
     parser.add_argument('--elapsed-last-modification', help='Minimum Time Elapsed Seconds since Last Modification for the Sync.')
     parser.add_argument('--aws-access-key-id', help='AWS Access Key ID')
@@ -100,6 +102,7 @@ if __name__ == '__main__':
     elapsed_last_modification = args.elapsed_last_modification
     kickoff_datetime = now + datetime.timedelta(minutes=kickoff_delay_minutes)
     include_prefix = args.include_prefix
+    exclude_prefix = args.exclude_prefix
     transfer_stop_datetime = kickoff_datetime + datetime.timedelta(minutes=transfer_stop_minutes)
     aws_access_key_id = args.aws_access_key_id
     aws_secret_access_key = args.aws_secret_access_key
@@ -116,4 +119,5 @@ if __name__ == '__main__':
         aws_secret_access_key,
         source_bucket,
         sink_bucket,
-        include_prefix)
+        include_prefix,
+        exclude_prefix)
