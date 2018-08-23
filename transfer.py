@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+from collections import defaultdict
 from pprint import pprint
 
 import googleapiclient.discovery
@@ -34,19 +35,9 @@ def list_ops(project_id, filter_source, filter_sink, delete_jobs):
         filter='{"project_id":"%s"}' % (project_id)
     )
 
-    operations = 0
-    success = 0
-    in_progress = 0
-    total = {
-        'bytesCopiedToSink': 0,
-        'bytesFoundFromSource': 0,
-        'bytesFromSourceFailed': 0,
-        'bytesFromSourceSkippedBySync': 0,
-        'objectsCopiedToSink': 0,
-        'objectsFoundFromSource': 0,
-        'objectsFromSourceFailed': 0,
-        'objectsFromSourceSkippedBySync': 0,
-    }
+    transfers = 0
+    status = defaultdict(int)
+    total = defaultdict(int)
 
     while request is not None:
         response = request.execute()
@@ -58,11 +49,8 @@ def list_ops(project_id, filter_source, filter_sink, delete_jobs):
 
             print('-'*70)
             pprint(metadata)
-            operations += 1
-            if metadata['status'] == 'SUCCESS':
-                success += 1
-            elif metadata['status'] == 'IN_PROGRESS':
-                in_progress += 1
+            transfers += 1
+            status[metadata['status'].lower()] += 1
             counters = metadata['counters']
             for (key, value) in counters.items():
                 total[key] += int(value)
@@ -76,8 +64,9 @@ def list_ops(project_id, filter_source, filter_sink, delete_jobs):
         )
 
     print('-'*70)
-    print('Matched %d transfers: %d successful, %d in-progress' % (
-        operations, success, in_progress
+    print('Matched %d transfers: %s' % (
+        transfers,
+        ', '.join(['%d %s' % (c, k) for (k, c) in status.items()])
     ))
     if total['bytesFoundFromSource'] > 0:
         copied = total['bytesCopiedToSink']
