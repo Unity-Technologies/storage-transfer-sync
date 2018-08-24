@@ -42,8 +42,7 @@ def main(project_id, filter_source, filter_sink, show_all_transfers, delete_jobs
     print('='*100)
     print('Matched %d jobs and %d transfers: %s' % (
         jobs, transfers,
-        ', '.join(['%d %s' % (c, k) for (k, c) in status.items()])
-    ))
+        ', '.join(['%d %s' % (c, k) for (k, c) in status.items()])))
 
     if total['bytesFoundFromSource'] > 0:
         copied = total['bytesCopiedToSink']
@@ -52,8 +51,7 @@ def main(project_id, filter_source, filter_sink, show_all_transfers, delete_jobs
             float(copied) / found * 100,
             sizeof_fmt(copied), sizeof_fmt(found),
             sizeof_fmt(total['bytesFromSourceFailed']),
-            sizeof_fmt(total['bytesFromSourceSkippedBySync'])
-        ))
+            sizeof_fmt(total['bytesFromSourceSkippedBySync'])))
 
     if total['objectsFoundFromSource'] > 0:
         copied = total['objectsCopiedToSink']
@@ -62,22 +60,19 @@ def main(project_id, filter_source, filter_sink, show_all_transfers, delete_jobs
             float(copied) / found * 100,
             sizeof_fmt(copied, '', False), sizeof_fmt(found, '', False),
             sizeof_fmt(total['objectsFromSourceFailed'], '', False),
-            sizeof_fmt(total['objectsFromSourceSkippedBySync'], '', False)
-        ))
+            sizeof_fmt(total['objectsFromSourceSkippedBySync'], '', False)))
 
 def each_operation(storagetransfer, project_id):
     request = storagetransfer.transferOperations().list(
         name='transferOperations',
-        filter='{"project_id":"%s"}' % (project_id)
-    )
+        filter='{"project_id":"%s"}' % (project_id))
     while request is not None:
         response = request.execute()
         for operation in response['operations']:
             yield operation['metadata']
         request = storagetransfer.transferOperations().list_next(
             previous_request=request,
-            previous_response=response
-        )
+            previous_response=response)
 
 def each_job(storagetransfer, project_id):
     request = storagetransfer.transferJobs().list(filter='{"project_id":"%s"}' % (project_id))
@@ -87,8 +82,7 @@ def each_job(storagetransfer, project_id):
             yield job
         request = storagetransfer.transferJobs().list_next(
             previous_request=request,
-            previous_response=response
-        )
+            previous_response=response)
 
 def recent_operation(operations, show_all):
     in_progress = False
@@ -134,13 +128,16 @@ def filtered(resource, source, sink):
         (sink and spec.get('gcsDataSink', spec.get('awsS3DataSink', {})).get('bucketName') != sink)
     )
 
+UNITS = ['','K','M','G','T','P','E','Z','Y']
+BINARY_UNITS = [u if u == '' else u+'i' for u in UNITS]
+
 def sizeof_fmt(num, suffix='B', binary=True):
-    units = ['','K','M','G','T','P','E','Z','Y']
     if binary:
         base = 1024
-        units = [u if u == '' else u+'i' for u in units]
+        units = BINARY_UNITS
     else:
         base = 1000
+        units = UNITS
     for unit in units:
         if abs(num) < base:
             break

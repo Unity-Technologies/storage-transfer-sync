@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+Create a Google Cloud Storage (GCS) transfer job to copy objects between buckets.
+"""
 
 import argparse
 import yaml
@@ -46,7 +49,6 @@ def main(args):
 
 def create(project_id, daily, kickoff_datetime, prefixes, elapsed_last_modification,
            source_spec, sink_spec, description, **transferOptions):
-    """Create a storage transfer job"""
 
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
@@ -144,12 +146,12 @@ if __name__ == '__main__':
     schedule_parser = parser.add_subparsers(title='schedule', dest='schedule')
 
     daily_parser = schedule_parser.add_parser('daily', parents=[common_parser],
-                                              help='Schedule a reoccuring transfer job')
+                                              help='Schedule a reoccurring transfer job')
     daily_parser.add_argument('start_time', type=lambda t: datetime.strptime(t, '%H:%M'),
                               help='Time to start transfer job each day')
 
-    once_parser = schedule_parser.add_parser('once', parents=[common_parser]
-                                             , help='Schedule a transfer job to run once')
+    once_parser = schedule_parser.add_parser('once', parents=[common_parser],
+                                             help='Schedule a transfer job to run once')
     once_parser.add_argument('minutes_from_now', type=int,
                              help='Number of minutes from now to start the transfer job')
 
