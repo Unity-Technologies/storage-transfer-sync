@@ -121,30 +121,35 @@ def dump(obj):
 
 
 if __name__ == '__main__':
+    common_parser = argparse.ArgumentParser(add_help=False)
+
+    common_parser.add_argument('--description', default='', help='Transfer job description')
+    common_parser.add_argument('--include-prefix', help='Include prefix for the transfer job')
+    common_parser.add_argument('--exclude-prefix', help='Exclude prefix for the transfer job')
+    common_parser.add_argument('--elapsed-last-modification', type=int,
+                               help='Minimum elapsed seconds since the source objects was modified')
+    common_parser.add_argument('--aws-access-key-id', help='AWS access key ID')
+    common_parser.add_argument('--aws-secret-access-key', help='AWS secret access key')
+
+    common_parser.add_argument('project_id', help='Your Google Cloud project ID')
+    common_parser.add_argument('source_bucket',
+                               help='Source bucket name (include gs:// or s3:// prefix)')
+    common_parser.add_argument('sink_bucket',
+                               help='Sink bucket name (include gs:// or s3:// prefix)')
+
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--description', default='', help='Transfer job description')
-    parser.add_argument('--include-prefix', help='Include prefix for the transfer job')
-    parser.add_argument('--exclude-prefix', help='Exclude prefix for the transfer job')
-    parser.add_argument('--elapsed-last-modification', type=int,
-                        help='Minimum elapsed seconds since the source objects was modified')
-    parser.add_argument('--aws-access-key-id', help='AWS access key ID')
-    parser.add_argument('--aws-secret-access-key', help='AWS secret access key')
-
-    parser.add_argument('project_id', help='Your Google Cloud project ID')
-    parser.add_argument('source_bucket',
-                        help='Source bucket name (include gs:// or s3:// prefix)')
-    parser.add_argument('sink_bucket',
-                        help='Sink bucket name (include gs:// or s3:// prefix)')
 
     schedule_parser = parser.add_subparsers(title='schedule', dest='schedule')
 
-    daily_parser = schedule_parser.add_parser('daily', help='Schedule a reoccuring transfer job')
+    daily_parser = schedule_parser.add_parser('daily', parents=[common_parser],
+                                              help='Schedule a reoccuring transfer job')
     daily_parser.add_argument('start_time', type=lambda t: datetime.strptime(t, '%H:%M'),
                               help='Time to start transfer job each day')
 
-    once_parser = schedule_parser.add_parser('once', help='Schedule a transfer job to run once')
+    once_parser = schedule_parser.add_parser('once', parents=[common_parser]
+                                             , help='Schedule a transfer job to run once')
     once_parser.add_argument('minutes_from_now', type=int,
                              help='Number of minutes from now to start the transfer job')
 
