@@ -96,6 +96,9 @@ def recent_operation(operations, show_all):
     youngest = None
     for operation in operations:
         if not youngest or show_all:
+            # drop keys already reported by the job
+            del(operation['transferJobName'])
+            del(operation['transferSpec'])
             print('-'*30)
             dump(operation)
         end = operation.get('endTime')
