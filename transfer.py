@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+List Google Cloud Storage (GCS) transfer jobs with option to delete.
+"""
 
 import argparse
 import yaml
@@ -9,12 +12,14 @@ from datetime import datetime
 import googleapiclient.discovery
 
 
-def main(project_id, filter_source, filter_sink, show_all_transfers, delete_jobs):
+def main(project_id, filter_job_status, filter_transfer_status, filter_source, filter_sink,
+         show_all_transfers, delete_jobs):
+
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
     operations = defaultdict(list)
     for operation in each_operation(storagetransfer, project_id):
-        if filtered(operation, filter_source, filter_sink):
+        if filtered(operation, filter_transfer_status, filter_source, filter_sink):
             continue
         operations[operation['transferJobName']].append(operation)
 
@@ -26,6 +31,8 @@ def main(project_id, filter_source, filter_sink, show_all_transfers, delete_jobs
     for job in each_job(storagetransfer, project_id):
         ops = operations.get(job['name'])
         if not ops:
+            continue
+        if filtered(job, filter_job_status, filter_source, filter_sink):
             continue
         jobs += 1
         print('='*100)
@@ -120,9 +127,11 @@ def delete_job(storagetransfer, project_id, job_name):
     response = request.execute()
     dump(response)
 
-def filtered(resource, source, sink):
+def filtered(resource, status, source, sink):
     spec = resource['transferSpec']
     return (
+        (status and resource.get('status') != status.upper())
+        or
         (source and spec.get('gcsDataSource', spec.get('awsS3DataSource', {})).get('bucketName') != source)
         or
         (sink and spec.get('gcsDataSink', spec.get('awsS3DataSink', {})).get('bucketName') != sink)
@@ -155,11 +164,14 @@ if __name__ == '__main__':
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--project-id', help='Your Google Cloud project ID.')
+    parser.add_argument('--filter-job-status', help='Show only jobs with matching status')
+    parser.add_argument('--filter-transfer-status',
+                        help='Show only jobs with matching transfer status')
     parser.add_argument('--filter-source-bucket', help='Show only matching source buckets')
     parser.add_argument('--filter-sink-bucket', help='Show only matching sink buckets')
     parser.add_argument('--show-all-transfers', action='store_true',
                         help='Show all transfers (default shows only most recent)')
     parser.add_argument('--delete', action='store_true', help='Delete all matching jobs')
     args = parser.parse_args()
-    main(args.project_id, args.filter_source_bucket, args.filter_sink_bucket,
-         args.show_all_transfers, args.delete)
+    main(args.project_id, args.filter_job_status, args.filter_transfer_status,
+         args.filter_source_bucket, args.filter_sink_bucket, args.show_all_transfers, args.delete)
