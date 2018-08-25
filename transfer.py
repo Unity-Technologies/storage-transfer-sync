@@ -4,6 +4,7 @@ List Google Cloud Storage (GCS) transfer jobs with option to delete.
 """
 
 import argparse
+import json
 import yaml
 import dateutil.parser
 from collections import defaultdict
@@ -18,8 +19,8 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
     operations = defaultdict(list)
-    for operation in each_operation(storagetransfer, project_id):
-        if filtered(operation, filter_transfer_status, filter_source, filter_sink):
+    for operation in each_operation(storagetransfer, project_id, filter_transfer_status):
+        if filtered(operation, filter_source, filter_sink):
             continue
         operations[operation['transferJobName']].append(operation)
 
@@ -28,11 +29,9 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     status = defaultdict(int)
     total = defaultdict(int)
 
-    for job in each_job(storagetransfer, project_id):
+    for job in each_job(storagetransfer, project_id, filter_job_status):
         ops = operations.get(job['name'])
         if not ops:
-            continue
-        if filtered(job, filter_job_status, filter_source, filter_sink):
             continue
         jobs += 1
         print('='*100)
@@ -69,27 +68,28 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
             sizeof_fmt(total['objectsFromSourceFailed'], '', False),
             sizeof_fmt(total['objectsFromSourceSkippedBySync'], '', False)))
 
-def each_operation(storagetransfer, project_id):
-    request = storagetransfer.transferOperations().list(
-        name='transferOperations',
-        filter='{"project_id":"%s"}' % (project_id))
-    while request is not None:
-        response = request.execute()
-        for operation in response['operations']:
-            yield operation['metadata']
-        request = storagetransfer.transferOperations().list_next(
-            previous_request=request,
-            previous_response=response)
+def each_operation(storagetransfer, project_id, *statuses):
+    for operation in each_resource(storagetransfer.transferOperations, 'operations', project_id,
+                                   'transfer_statuses', statuses, name='transferOperations'):
+        yield operation['metadata']
 
-def each_job(storagetransfer, project_id):
-    request = storagetransfer.transferJobs().list(filter='{"project_id":"%s"}' % (project_id))
+def each_job(storagetransfer, project_id, *statuses):
+    for job in each_resource(storagetransfer.transferJobs, 'transferJobs', project_id,
+                             'job_statuses', statuses):
+        yield job
+
+def each_resource(func, resource_key, project_id, status_key, statuses, **list_kwargs):
+    fltr = {'project_id': project_id}
+    statuses = [s for s in statuses if s is not None]
+    if statuses:
+        fltr[status_key] = statuses
+    list_kwargs['filter'] = json.dumps(fltr)
+    request = func().list(**list_kwargs)
     while request is not None:
         response = request.execute()
-        for job in response['transferJobs']:
-            yield job
-        request = storagetransfer.transferJobs().list_next(
-            previous_request=request,
-            previous_response=response)
+        for resource in response[resource_key]:
+            yield resource
+        request = func().list_next(previous_request=request, previous_response=response)
 
 def recent_operation(operations, show_all):
     in_progress = False
@@ -127,11 +127,9 @@ def delete_job(storagetransfer, project_id, job_name):
     response = request.execute()
     dump(response)
 
-def filtered(resource, status, source, sink):
+def filtered(resource, source, sink):
     spec = resource['transferSpec']
     return (
-        (status and resource.get('status') != status.upper())
-        or
         (source and spec.get('gcsDataSource', spec.get('awsS3DataSource', {})).get('bucketName') != source)
         or
         (sink and spec.get('gcsDataSink', spec.get('awsS3DataSink', {})).get('bucketName') != sink)
