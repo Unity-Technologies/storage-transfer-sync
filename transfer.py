@@ -6,6 +6,7 @@ List Google Cloud Storage (GCS) transfer jobs with option to delete.
 import argparse
 import json
 import yaml
+import time
 import dateutil.parser
 from collections import defaultdict
 from datetime import datetime
@@ -30,7 +31,8 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     total = defaultdict(int)
 
     for job in each_job(storagetransfer, project_id, filter_job_status):
-        ops = operations.get(job['name'])
+        job_name = job['name']
+        ops = operations.get(job_name)
         if not ops:
             continue
         jobs += 1
@@ -44,6 +46,7 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
             total[key] += int(value)
         if delete_jobs:
             delete_job(storagetransfer, project_id, job_name)
+            time.sleep(1)  # avoid quota of "Maximum requests per 100 seconds per user: 100"
 
     print('='*100)
     print('Matched %d jobs and %d transfers: %s' % (
@@ -87,6 +90,8 @@ def each_resource(func, resource_key, project_id, status_key, statuses, **list_k
     request = func().list(**list_kwargs)
     while request is not None:
         response = request.execute()
+        if resource_key not in response:
+            return
         for resource in response[resource_key]:
             yield resource
         request = func().list_next(previous_request=request, previous_response=response)
@@ -161,7 +166,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--project-id', help='Your Google Cloud project ID.')
     parser.add_argument('--filter-job-status', help='Show only jobs with matching status')
     parser.add_argument('--filter-transfer-status',
                         help='Show only jobs with matching transfer status')
@@ -170,6 +174,7 @@ if __name__ == '__main__':
     parser.add_argument('--show-all-transfers', action='store_true',
                         help='Show all transfers (default shows only most recent)')
     parser.add_argument('--delete', action='store_true', help='Delete all matching jobs')
+    parser.add_argument('project_id', help='Your Google Cloud project ID.')
     args = parser.parse_args()
     main(args.project_id, args.filter_job_status, args.filter_transfer_status,
          args.filter_source_bucket, args.filter_sink_bucket, args.show_all_transfers, args.delete)
