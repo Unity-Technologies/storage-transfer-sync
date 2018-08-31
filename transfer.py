@@ -15,7 +15,7 @@ import googleapiclient.discovery
 
 
 def main(project_id, filter_job_status, filter_transfer_status, filter_source, filter_sink,
-         show_all_transfers, delete_jobs):
+         show_all_transfers, delete_jobs, summarize):
 
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
@@ -36,9 +36,10 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
         if not ops:
             continue
         jobs += 1
-        print('='*100)
-        dump(job)
-        operation = recent_operation(ops, show_all_transfers)
+        if not summarize:
+            print('='*100)
+            dump(job)
+        operation = recent_operation(ops, show_all_transfers, summarize)
         transfers += len(ops)
         status[operation['status'].lower()] += 1
         counters = operation['counters']
@@ -47,6 +48,18 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
         if delete_jobs:
             delete_job(storagetransfer, project_id, job_name)
             time.sleep(1)  # avoid quota of "Maximum requests per 100 seconds per user: 100"
+
+    if summarize:
+        total['jobCount'] = jobs
+        total['transferCount'] = transfers
+        for k, c in status.items():
+            total[k + 'Count'] = c
+        if summarize == 'json':
+            print(json.dumps(total))
+        else:
+            for k in sorted(total):
+                print('%s=%d' % (k, total[k]))
+        return
 
     print('='*100)
     print('Matched %d jobs and %d transfers: %s' % (
@@ -96,7 +109,7 @@ def each_resource(func, resource_key, project_id, status_key, statuses, **list_k
             yield resource
         request = func().list_next(previous_request=request, previous_response=response)
 
-def recent_operation(operations, show_all):
+def recent_operation(operations, show_all, summarize):
     in_progress = False
     last_ts = None
     youngest = None
@@ -105,8 +118,9 @@ def recent_operation(operations, show_all):
             # drop keys already reported by the job
             del(operation['transferJobName'])
             del(operation['transferSpec'])
-            print('-'*30)
-            dump(operation)
+            if not summarize:
+                print('-'*30)
+                dump(operation)
         end = operation.get('endTime')
         if end:
             ts = dateutil.parser.parse(end)
@@ -174,7 +188,9 @@ if __name__ == '__main__':
     parser.add_argument('--show-all-transfers', action='store_true',
                         help='Show all transfers (default shows only most recent)')
     parser.add_argument('--delete', action='store_true', help='Delete all matching jobs')
+    parser.add_argument('--summarize', choices=['json', 'shell'], help='Show only summary')
     parser.add_argument('project_id', help='Your Google Cloud project ID.')
     args = parser.parse_args()
     main(args.project_id, args.filter_job_status, args.filter_transfer_status,
-         args.filter_source_bucket, args.filter_sink_bucket, args.show_all_transfers, args.delete)
+         args.filter_source_bucket, args.filter_sink_bucket, args.show_all_transfers,
+         args.delete, args.summarize)
