@@ -29,6 +29,7 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     transfers = 0
     status = defaultdict(int)
     total = defaultdict(int)
+    times = {'start': None, 'end': None}
 
     for job in each_job(storagetransfer, project_id, filter_job_status):
         job_name = job['name']
@@ -40,6 +41,7 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
             print('='*100)
             dump(job)
         operation = recent_operation(ops, show_all_transfers, summarize)
+        update_elapsed(times, operation)
         transfers += len(ops)
         status[operation['status'].lower()] += 1
         counters = operation['counters']
@@ -48,6 +50,10 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
         if delete_jobs:
             delete_job(storagetransfer, project_id, job_name)
             time.sleep(1)  # avoid quota of "Maximum requests per 100 seconds per user: 100"
+
+    if not times['end']:
+        times['end'] = datetime.utcnow()
+    total['elapsed_seconds'] = (times['end'] - times['start']).total_seconds()
 
     if summarize:
         total['jobCount'] = jobs
@@ -58,7 +64,9 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
             print(json.dumps(total))
         else:
             for k in sorted(total):
-                print('%s=%d' % (k, total[k]))
+                v = total[k]
+                fmt = 'd' if isinstance(v, int) else '0.1f'
+                print(('%s=%'+fmt) % (k, v))
         return
 
     print('='*100)
@@ -83,6 +91,19 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
             sizeof_fmt(copied, '', False), sizeof_fmt(found, '', False),
             sizeof_fmt(total['objectsFromSourceFailed'], '', False),
             sizeof_fmt(total['objectsFromSourceSkippedBySync'], '', False)))
+
+def update_elapsed(times, operation):
+    # find the oldest start and the newest end times
+    start = operation.get('startTime')
+    if start:
+        start = dateutil.parser.parse(start)
+        if times['start'] is None or start < times['start']:
+            times['start'] = start
+    end = operation.get('endTime')
+    if end:
+        end = dateutil.parser.parse(end)
+        if times['end'] is None or end > times['end']:
+            times['end'] = end
 
 def each_operation(storagetransfer, project_id, *statuses):
     for operation in each_resource(storagetransfer.transferOperations, 'operations', project_id,
