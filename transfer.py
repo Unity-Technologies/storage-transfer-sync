@@ -10,6 +10,7 @@ import time
 import dateutil.parser
 from collections import defaultdict
 from datetime import datetime
+from dateutil.tz import tzutc
 
 import googleapiclient.discovery
 
@@ -51,13 +52,16 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
             delete_job(storagetransfer, project_id, job_name)
             time.sleep(1)  # avoid quota of "Maximum requests per 100 seconds per user: 100"
 
+    now = datetime.utcnow().replace(tzinfo=tzutc())
     if not times['end']:
-        times['end'] = datetime.utcnow()
-    total['elapsed_seconds'] = (times['end'] - times['start']).total_seconds()
+        times['end'] = now
+
+    total['elapsedSeconds'] = (times['end'] - times['start']).total_seconds()
+    total['endHoursAgo'] = (now - times['end']).total_seconds() / 3600.0
 
     if summarize:
         total['jobCount'] = jobs
-        total['transferCount'] = transfers
+        total['transfer Count'] = transfers
         for k, c in status.items():
             total[k + 'Count'] = c
         if summarize == 'json':
@@ -65,7 +69,12 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
         else:
             for k in sorted(total):
                 v = total[k]
-                fmt = 'd' if isinstance(v, int) else '0.1f'
+                if isinstance(v, int):
+                    fmt = 'd'
+                elif isinstance(v, float):
+                    fmt = '0.1f'
+                else:
+                    fmt = 's'
                 print(('%s=%'+fmt) % (k, v))
         return
 
