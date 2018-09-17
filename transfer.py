@@ -52,12 +52,12 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
             delete_job(storagetransfer, project_id, job_name)
             time.sleep(1)  # avoid quota of "Maximum requests per 100 seconds per user: 100"
 
-    now = datetime.utcnow().replace(tzinfo=tzutc())
-    if not times['end']:
-        times['end'] = now
-
-    total['elapsedSeconds'] = (times['end'] - times['start']).total_seconds()
-    total['endHoursAgo'] = (now - times['end']).total_seconds() / 3600.0
+    if times['start']:
+        now = datetime.utcnow().replace(tzinfo=tzutc())
+        if not times['end']:
+            times['end'] = now
+        total['elapsedSeconds'] = (times['end'] - times['start']).total_seconds()
+        total['endHoursAgo'] = (now - times['end']).total_seconds() / 3600.0
 
     if summarize:
         total['jobCount'] = jobs
@@ -82,8 +82,9 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     print('Matched %d jobs and %d transfers: %s' % (
         jobs, transfers,
         ', '.join(['%d %s' % (c, k) for (k, c) in status.items()])))
-    print('Ran for %0.1f seconds, finishing at %s, %0.1f hours ago' %(
-        total['elapsedSeconds'], times['end'], total['endHoursAgo']))
+    if 'elapsedSeconds' in total:
+        print('Ran for %0.1f seconds, finishing at %s, %0.1f hours ago' %(
+            total['elapsedSeconds'], times['end'], total['endHoursAgo']))
 
     if total['bytesFoundFromSource'] > 0:
         copied = total['bytesCopiedToSink']
