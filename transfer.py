@@ -58,7 +58,7 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
         now = datetime.utcnow().replace(tzinfo=tzutc())
         if not times['end']:
             times['end'] = now
-        total['elapsedSeconds'] = (times['end'] - times['start']).total_seconds()
+        total['elapsedSeconds'] = int(round((times['end'] - times['start']).total_seconds()))
         total['endHoursAgo'] = (now - times['end']).total_seconds() / 3600.0
 
     if summarize:
@@ -85,7 +85,7 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
         jobs, transfers,
         ', '.join(['%d %s' % (c, k) for (k, c) in status.items()])))
     if 'elapsedSeconds' in total:
-        print('Ran for %0.1f seconds, finishing at %s, %0.1f hours ago' %(
+        print('Ran for %d seconds, finishing at %s, %0.1f hours ago' %(
             total['elapsedSeconds'], times['end'], total['endHoursAgo']))
         print('Oldest:')
         dump(times.get('oldestStartTransfer'))
@@ -162,7 +162,7 @@ def recent_operation(operations, start_day, show_all, summarize):
         end = operation.get('endTime')
         if end:
             end_ts = dateutil.parser.parse(end)
-            operation['elapsedSeconds'] = (end_ts - start_ts).total_seconds()
+            operation['elapsedSeconds'] = int(round((end_ts - start_ts).total_seconds()))
             if not last_ts or end_ts > last_ts:
                 last_ts = end_ts
                 youngest = operation
