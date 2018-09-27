@@ -16,7 +16,7 @@ import googleapiclient.discovery
 
 
 def main(project_id, filter_job_status, filter_transfer_status, filter_source, filter_sink,
-         show_all_transfers, delete_jobs, summarize):
+         filter_start, show_all_transfers, delete_jobs, summarize):
 
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
@@ -41,7 +41,7 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
         if not summarize:
             print('='*100)
             dump(job)
-        operation = recent_operation(ops, show_all_transfers, summarize)
+        operation = recent_operation(ops, filter_start, show_all_transfers, summarize)
         update_elapsed(times, operation)
         transfers += len(ops)
         status[operation['status'].lower()] += 1
@@ -85,6 +85,9 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     if 'elapsedSeconds' in total:
         print('Ran for %0.1f seconds, finishing at %s, %0.1f hours ago' %(
             total['elapsedSeconds'], times['end'], total['endHoursAgo']))
+        print('Oldest:')
+        dump(times['oldestStartTransfer'])
+        dump(times['oldestEndTransfer'])
 
     if total['bytesFoundFromSource'] > 0:
         copied = total['bytesCopiedToSink']
@@ -111,11 +114,13 @@ def update_elapsed(times, operation):
         start = dateutil.parser.parse(start)
         if times['start'] is None or start < times['start']:
             times['start'] = start
+            times['oldestStartTransfer'] = operation
     end = operation.get('endTime')
     if end:
         end = dateutil.parser.parse(end)
         if times['end'] is None or end > times['end']:
             times['end'] = end
+            times['oldestEndTransfer'] = operation
 
 def each_operation(storagetransfer, project_id, *statuses):
     for operation in each_resource(storagetransfer.transferOperations, 'operations', project_id,
@@ -142,31 +147,42 @@ def each_resource(func, resource_key, project_id, status_key, statuses, **list_k
             yield resource
         request = func().list_next(previous_request=request, previous_response=response)
 
-def recent_operation(operations, show_all, summarize):
+def recent_operation(operations, start_day, show_all, summarize):
     in_progress = False
     last_ts = None
     youngest = None
+
     for operation in operations:
-        if not youngest or show_all:
+        start_ts = dateutil.parser.parse(operation['startTime'])
+        if start_day and start_day != start_ts.day:
+            continue
+
+        end = operation.get('endTime')
+        if end:
+            end_ts = dateutil.parser.parse(end)
+            operation['elapsedSeconds'] = (end_ts - start_ts).total_seconds()
+            if not last_ts or end_ts > last_ts:
+                last_ts = end_ts
+                youngest = operation
+        elif in_progress:
+            raise ValueError('More than one transfer in progress')
+        else:
+            if not last_ts or start_ts > last_ts:
+                last_ts = start_ts
+                youngest = operation
+
+        if show_all:
             # drop keys already reported by the job
             del(operation['transferJobName'])
             del(operation['transferSpec'])
             if not summarize:
                 print('-'*30)
                 dump(operation)
-        end = operation.get('endTime')
-        if end:
-            ts = dateutil.parser.parse(end)
-            if not last_ts or ts > last_ts:
-                last_ts = ts
-                youngest = operation
-        elif in_progress:
-            raise ValueError('More than one transfer in progress')
-        else:
-            ts = dateutil.parser.parse(operation['startTime'])
-            if not last_ts or ts > last_ts:
-                last_ts = ts
-                youngest = operation
+
+    if not summarize and not show_all:
+        print('-'*30)
+        dump(youngest)
+
     return youngest
 
 def delete_job(storagetransfer, project_id, job_name):
@@ -197,13 +213,14 @@ def sizeof_fmt(num, suffix='B', binary=True):
     else:
         base = 1000
         units = UNITS
+    minimum = base * 1.5 # show some granularity around the exact base boundary
     for unit in units:
-        if abs(num) < base:
+        if num < minimum:
             break
         num /= base
     if num == 0.0:
         return '0'+suffix
-    return "%.1f%s%s" % (num, unit, suffix)
+    return "%.2f%s%s" % (num, unit, suffix)
 
 def dump(obj):
     print(yaml.safe_dump(obj))
@@ -218,6 +235,8 @@ if __name__ == '__main__':
                         help='Show only jobs with matching transfer status')
     parser.add_argument('--filter-source-bucket', help='Show only matching source buckets')
     parser.add_argument('--filter-sink-bucket', help='Show only matching sink buckets')
+    parser.add_argument('--filter-start-day', type=int, choices=range(1, 31),
+                        help='Show only matching transfer on this day (UTC)')
     parser.add_argument('--show-all-transfers', action='store_true',
                         help='Show all transfers (default shows only most recent)')
     parser.add_argument('--delete', action='store_true', help='Delete all matching jobs')
@@ -225,5 +244,5 @@ if __name__ == '__main__':
     parser.add_argument('project_id', help='Your Google Cloud project ID.')
     args = parser.parse_args()
     main(args.project_id, args.filter_job_status, args.filter_transfer_status,
-         args.filter_source_bucket, args.filter_sink_bucket, args.show_all_transfers,
-         args.delete, args.summarize)
+         args.filter_source_bucket, args.filter_sink_bucket, args.filter_start_day,
+         args.show_all_transfers, args.delete, args.summarize)
