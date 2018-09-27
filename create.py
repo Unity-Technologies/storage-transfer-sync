@@ -126,8 +126,10 @@ if __name__ == '__main__':
     common_parser = argparse.ArgumentParser(add_help=False)
 
     common_parser.add_argument('--description', default='', help='Transfer job description')
-    common_parser.add_argument('--include-prefix', help='Include prefix for the transfer job')
-    common_parser.add_argument('--exclude-prefix', help='Exclude prefix for the transfer job')
+    common_parser.add_argument('--include-prefix', nargs='+',
+                               help='Include prefix for the transfer job')
+    common_parser.add_argument('--exclude-prefix', nargs='+',
+                               help='Exclude prefix for the transfer job')
     common_parser.add_argument('--elapsed-last-modification', type=int,
                                help='Minimum elapsed seconds since the source objects was modified')
     common_parser.add_argument('--aws-access-key-id', help='AWS access key ID')
