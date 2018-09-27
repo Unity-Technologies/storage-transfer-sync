@@ -6,9 +6,14 @@ else
     max_jobs=1000
 fi
 
+if [[ "$1" = '--name' ]]; then
+    shift; job_name=$1; shift
+fi
+
 if [[ $# -lt 3 ]]; then
     cat <<EOF 2>&1
-usage: $(basename "$0" .sh) [--max-jobs <count>] <first_char> <last_char> <create_args>...
+usage: $(basename "$0" .sh) [--max-jobs <count>] [--name <job_name>] \
+<first_char> <last_char> <create_args>...
 
   Will submit at most ${max_jobs} jobs, each broken up with one or more prefixes to synchronize.
 
@@ -52,8 +57,9 @@ while [[ $i -le $last ]]; do
         (( ++b ))
         (( ++i ))
     done
-    echo "--- ${prefixes[*]} ----------------------------------------------------------------------"
-    args=("$@" --include-prefix "${prefixes[@]}" --description "${prefixes[*]}")
+    desc="${job_name} ${prefixes[*]}"
+    echo "--- ${desc} ----------------------------------------------------------------------"
+    args=("$@" --include-prefix "${prefixes[@]}" --description "${desc}")
     echo ./create.py $(printf ' %q' "${args[@]}")
     ./create.py "${args[@]}"
     sleep 1 # avoid quota of "Maximum requests per 100 seconds per user: 100"

@@ -15,8 +15,8 @@ from dateutil.tz import tzutc
 import googleapiclient.discovery
 
 
-def main(project_id, filter_job_status, filter_transfer_status, filter_source, filter_sink,
-         filter_start, show_all_transfers, delete_jobs, summarize):
+def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
+         filter_source, filter_sink, filter_start, show_all_transfers, delete_jobs, summarize):
 
     storagetransfer = googleapiclient.discovery.build('storagetransfer', 'v1')
 
@@ -33,6 +33,8 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     times = {'start': None, 'end': None}
 
     for job in each_job(storagetransfer, project_id, filter_job_status):
+        if filter_job_desc and filter_job_desc not in job['description']:
+            continue
         job_name = job['name']
         ops = operations.get(job_name)
         if not ops:
@@ -72,7 +74,7 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
                 if isinstance(v, int):
                     fmt = 'd'
                 elif isinstance(v, float):
-                    fmt = '0.1f'
+                    fmt = '0.2f'
                 else:
                     fmt = 's'
                 print(('%s=%'+fmt) % (k, v))
@@ -86,13 +88,13 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
         print('Ran for %0.1f seconds, finishing at %s, %0.1f hours ago' %(
             total['elapsedSeconds'], times['end'], total['endHoursAgo']))
         print('Oldest:')
-        dump(times['oldestStartTransfer'])
-        dump(times['oldestEndTransfer'])
+        dump(times.get('oldestStartTransfer'))
+        dump(times.get('oldestEndTransfer'))
 
     if total['bytesFoundFromSource'] > 0:
         copied = total['bytesCopiedToSink']
         found = total['bytesFoundFromSource']
-        print('Copied %4.1f%% bytes: %s / %s, %s failed, %s skipped' % (
+        print('Copied %4.2f%% bytes: %s / %s, %s failed, %s skipped' % (
             float(copied) / found * 100,
             sizeof_fmt(copied), sizeof_fmt(found),
             sizeof_fmt(total['bytesFromSourceFailed']),
@@ -101,7 +103,7 @@ def main(project_id, filter_job_status, filter_transfer_status, filter_source, f
     if total['objectsFoundFromSource'] > 0:
         copied = total['objectsCopiedToSink']
         found = total['objectsFoundFromSource']
-        print('Found %4.1f%% objects: %s / %s, %s failed, %s skipped' % (
+        print('Found %4.2f%% objects: %s / %s, %s failed, %s skipped' % (
             float(copied) / found * 100,
             sizeof_fmt(copied, '', False), sizeof_fmt(found, '', False),
             sizeof_fmt(total['objectsFromSourceFailed'], '', False),
@@ -208,10 +210,10 @@ BINARY_UNITS = [u if u == '' else u+'i' for u in UNITS]
 
 def sizeof_fmt(num, suffix='B', binary=True):
     if binary:
-        base = 1024
+        base = 1024.0
         units = BINARY_UNITS
     else:
-        base = 1000
+        base = 1000.0
         units = UNITS
     minimum = base * 1.5 # show some granularity around the exact base boundary
     for unit in units:
@@ -220,6 +222,8 @@ def sizeof_fmt(num, suffix='B', binary=True):
         num /= base
     if num == 0.0:
         return '0'+suffix
+    if num == round(num):
+        return "%d%s%s" % (num, unit, suffix)
     return "%.2f%s%s" % (num, unit, suffix)
 
 def dump(obj):
@@ -230,6 +234,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--filter-job-description', help='Show only jobs with matching description')
     parser.add_argument('--filter-job-status', help='Show only jobs with matching status')
     parser.add_argument('--filter-transfer-status',
                         help='Show only jobs with matching transfer status')
@@ -243,6 +248,6 @@ if __name__ == '__main__':
     parser.add_argument('--summarize', choices=['json', 'shell'], help='Show only summary')
     parser.add_argument('project_id', help='Your Google Cloud project ID.')
     args = parser.parse_args()
-    main(args.project_id, args.filter_job_status, args.filter_transfer_status,
-         args.filter_source_bucket, args.filter_sink_bucket, args.filter_start_day,
-         args.show_all_transfers, args.delete, args.summarize)
+    main(args.project_id, args.filter_job_description, args.filter_job_status,
+         args.filter_transfer_status, args.filter_source_bucket, args.filter_sink_bucket,
+         args.filter_start_day, args.show_all_transfers, args.delete, args.summarize)
