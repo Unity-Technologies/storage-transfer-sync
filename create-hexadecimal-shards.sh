@@ -1,14 +1,14 @@
 #!/bin/bash
 
-if [[ "$1" = '--max-jobs' ]]; then
-    shift; max_jobs=$1; shift
-else
-    max_jobs=1000
-fi
+max_jobs=1000
 
-if [[ "$1" = '--name' ]]; then
-    shift; job_name=$1; shift
-fi
+while true; do
+    case "$1" in
+        --max-jobs) shift; max_jobs=$1; shift;;
+        --name) shift; job_name=$1; shift;;
+        *) break
+    esac
+done
 
 if [[ $# -lt 3 ]]; then
     cat <<EOF 2>&1
@@ -16,6 +16,8 @@ usage: $(basename "$0" .sh) [--max-jobs <count>] [--name <job_name>] \
 <first_char> <last_char> <create_args>...
 
   Will submit at most ${max_jobs} jobs, each broken up with one or more prefixes to synchronize.
+
+  https://cloud.google.com/storage-transfer/quotas
 
 EOF
     exit 1
@@ -34,7 +36,8 @@ last_batch_size=$(( count % batch_size ))
 cat <<EOF
 
 This will submit ${job_count} jobs each processing ${batch_size} prefixes. \
-The final job will process ${last_batch_size} prefixes.
+The final job will process ${last_batch_size} prefixes. \
+A total of ${count} prefixes will be processed.
 This will take at least $(( job_count / 60 )) minutes (rate limted at one submitted per second).
 
 EOF
@@ -47,8 +50,11 @@ set -e
 last_hex=$(printf %x ${last})
 fmt="%0${#last_hex}x" # same width as last char as hex
 
+failures=0
+cnt=0
 i=$first
 while [[ $i -le $last ]]; do
+    (( ++cnt ))
     [[ $i -eq $last ]] && batch_size=${last_batch_size}
     prefixes=()
     b=0
@@ -58,9 +64,20 @@ while [[ $i -le $last ]]; do
         (( ++i ))
     done
     desc="${job_name} ${prefixes[*]}"
-    echo "--- ${desc} ----------------------------------------------------------------------"
+    echo "--- job #${cnt} (${failures} failed): ${desc} ----------------------------------------------------------------------"
     args=("$@" --include-prefix "${prefixes[@]}" --description "${desc}")
     echo ./create.py $(printf ' %q' "${args[@]}")
-    ./create.py "${args[@]}"
+    if ! ./create.py "${args[@]}"; then
+        rc=$?
+        (( ++failures ))
+        cat <<EOF >&2
+
+****************************************
+*** FAILED! Will attempt a retry...
+
+EOF
+        sleep 0.5
+        ./create.py "${args[@]}"
+    fi
     sleep 1 # avoid quota of "Maximum requests per 100 seconds per user: 100"
 done
