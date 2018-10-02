@@ -199,7 +199,7 @@ def recent_operation(operations, start_day, show_all, summarize):
         print('-'*30)
         dump(youngest)
     elif isinstance(summarize, dict):
-        flatop = flatten(operation)
+        flatop = flatten(youngest)
         row = [flatop.get(column) for column in summarize['columns']]
         summarize['writer'].writerow(row)
 
