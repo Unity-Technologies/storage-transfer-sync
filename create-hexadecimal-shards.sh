@@ -73,10 +73,10 @@ while [[ $i -le $last ]]; do
         cat <<EOF >&2
 
 ****************************************
-*** FAILED! Will attempt a retry...
+*** FAILED! Will attempt a retry in a few seconds...
 
 EOF
-        sleep 0.5
+        sleep 3
         ./create.py "${args[@]}"
     fi
     sleep 1 # avoid quota of "Maximum requests per 100 seconds per user: 100"

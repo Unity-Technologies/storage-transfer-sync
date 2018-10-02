@@ -3,10 +3,12 @@
 List Google Cloud Storage (GCS) transfer jobs with option to delete.
 """
 
+import sys
 import argparse
 import json
 import yaml
 import time
+import csv
 import dateutil.parser
 from collections import defaultdict
 from datetime import datetime
@@ -30,7 +32,7 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
     transfers = 0
     status = defaultdict(int)
     total = defaultdict(int)
-    times = {'start': None, 'end': None}
+    times = {'start': None, 'end': None, 'totalElapsedSeconds': 0, 'maxElapsedSeconds': 0}
 
     for job in each_job(storagetransfer, project_id, filter_job_status):
         if filter_job_desc and filter_job_desc not in job['description']:
@@ -60,6 +62,8 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
             times['end'] = now
         total['elapsedSeconds'] = int(round((times['end'] - times['start']).total_seconds()))
         total['endHoursAgo'] = (now - times['end']).total_seconds() / 3600.0
+        total['averageElapsedSeconds'] = int(round(times['totalElapsedSeconds'] / jobs))
+        total['maxElapsedSeconds'] = times['maxElapsedSeconds']
 
     if summarize:
         total['jobCount'] = jobs
@@ -85,8 +89,9 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
         jobs, transfers,
         ', '.join(['%d %s' % (c, k) for (k, c) in status.items()])))
     if 'elapsedSeconds' in total:
-        print('Ran for %d seconds, finishing at %s, %0.1f hours ago' %(
-            total['elapsedSeconds'], times['end'], total['endHoursAgo']))
+        print('Ran for %d seconds (%d avg, %d max), finishing at %s, %0.1f hours ago' %(
+            total['elapsedSeconds'], total['averageElapsedSeconds'], total['maxElapsedSeconds'],
+            times['end'], total['endHoursAgo']))
         print('Oldest:')
         dump(times.get('oldestStartTransfer'))
         dump(times.get('oldestEndTransfer'))
@@ -117,12 +122,21 @@ def update_elapsed(times, operation):
         if times['start'] is None or start < times['start']:
             times['start'] = start
             times['oldestStartTransfer'] = operation
+
     end = operation.get('endTime')
     if end:
+        elapsed = operation['elapsedSeconds']
         end = dateutil.parser.parse(end)
         if times['end'] is None or end > times['end']:
             times['end'] = end
             times['oldestEndTransfer'] = operation
+    else:
+        now = datetime.utcnow().replace(tzinfo=tzutc())
+        elapsed = (now - start).total_seconds()
+
+    times['totalElapsedSeconds'] += elapsed
+    if elapsed > times['maxElapsedSeconds']:
+        times['maxElapsedSeconds'] = elapsed
 
 def each_operation(storagetransfer, project_id, *statuses):
     for operation in each_resource(storagetransfer.transferOperations, 'operations', project_id,
@@ -184,8 +198,22 @@ def recent_operation(operations, start_day, show_all, summarize):
     if not summarize and not show_all:
         print('-'*30)
         dump(youngest)
+    elif isinstance(summarize, dict):
+        flatop = flatten(operation)
+        row = [flatop.get(column) for column in summarize['columns']]
+        summarize['writer'].writerow(row)
 
     return youngest
+
+def flatten(dct, parent=''):
+    items = []
+    for k, v in dct.items():
+        new_key = parent + '.' + k if parent else k
+        if isinstance(v, dict):
+            items.extend(flatten(v, new_key).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 def delete_job(storagetransfer, project_id, job_name):
     update_transfer_job = {
@@ -245,9 +273,16 @@ if __name__ == '__main__':
     parser.add_argument('--show-all-transfers', action='store_true',
                         help='Show all transfers (default shows only most recent)')
     parser.add_argument('--delete', action='store_true', help='Delete all matching jobs')
+    parser.add_argument('--csv-columns', nargs='+', help='Output using comma-delimited rows')
     parser.add_argument('--summarize', choices=['json', 'shell'], help='Show only summary')
     parser.add_argument('project_id', help='Your Google Cloud project ID.')
     args = parser.parse_args()
+
+    if args.csv_columns:
+        writer = csv.writer(sys.stdout)
+        writer.writerow(args.csv_columns)
+        args.summarize = {'writer': writer, 'columns': args.csv_columns}
+
     main(args.project_id, args.filter_job_description, args.filter_job_status,
          args.filter_transfer_status, args.filter_source_bucket, args.filter_sink_bucket,
          args.filter_start_day, args.show_all_transfers, args.delete, args.summarize)
