@@ -70,7 +70,7 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
         if isinstance(summarize, dict):
             return
         total['jobCount'] = jobs
-        total['transfer Count'] = transfers
+        total['transferCount'] = transfers
         for k, c in status.items():
             total[k + 'Count'] = c
         if summarize == 'json':
