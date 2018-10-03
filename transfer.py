@@ -9,6 +9,7 @@ import json
 import yaml
 import time
 import csv
+import re
 import dateutil.parser
 from collections import defaultdict
 from datetime import datetime
@@ -35,7 +36,7 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
     times = {'start': None, 'end': None, 'totalElapsedSeconds': 0, 'maxElapsedSeconds': 0}
 
     for job in each_job(storagetransfer, project_id, filter_job_status):
-        if filter_job_desc and filter_job_desc not in job['description']:
+        if filter_job_desc and not re.search(filter_job_desc, job['description']):
             continue
         job_name = job['name']
         ops = operations.get(job_name)
@@ -66,6 +67,8 @@ def main(project_id, filter_job_desc, filter_job_status, filter_transfer_status,
         total['maxElapsedSeconds'] = times['maxElapsedSeconds']
 
     if summarize:
+        if isinstance(summarize, dict):
+            return
         total['jobCount'] = jobs
         total['transfer Count'] = transfers
         for k, c in status.items():
@@ -194,6 +197,10 @@ def recent_operation(operations, start_day, show_all, summarize):
             if not summarize:
                 print('-'*30)
                 dump(operation)
+            elif isinstance(summarize, dict):
+                flatop = flatten(operation)
+                row = [flatop.get(column) for column in summarize['columns']]
+                summarize['writer'].writerow(row)
 
     if not summarize and not show_all:
         print('-'*30)

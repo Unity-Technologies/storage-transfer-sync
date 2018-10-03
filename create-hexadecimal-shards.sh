@@ -55,10 +55,9 @@ cnt=0
 i=$first
 while [[ $i -le $last ]]; do
     (( ++cnt ))
-    [[ $i -eq $last ]] && batch_size=${last_batch_size}
     prefixes=()
     b=0
-    while [[ $b -lt ${batch_size} ]]; do
+    while [[ $b -lt ${batch_size} && $i -le $last ]]; do
         prefixes+=("$(printf ${fmt} $i)")
         (( ++b ))
         (( ++i ))
