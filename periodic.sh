@@ -1,8 +1,14 @@
 #!/bin/bash
 
+if [[ "$1" = '--gsutil' ]]; then
+    gsutil=true; shift
+else
+    gsutil=false
+fi
+
 if [[ $# -lt 4 ]]; then
     cat <<EOF >&2
-usage: $(basename "$0") <gcp_project> <job_name> <interval_seconds> <create_args...>
+usage: $(basename "$0") [--gsutil] <gcp_project> <job_name> <interval_seconds> <create_args...>
 EOF
     exit 1
 fi
@@ -22,27 +28,66 @@ DB_NAME=unity_cloud_collab
 # make sure to always look back _PAST_ the last time mysql is queried by an additional 5 minutes
 OVERLAP_SECONDS=300
 
-function wait_for_complete()
-{
-    local in_progressCount summary
-    while true; do
-        echo 'vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
-        log
-        in_progressCount=''
-        summary="$(./transfer.py "${GCP_PROJECT}" --filter-transfer-status in_progress --summarize shell)"
-        if [[ $? -ne 0 ]]; then
+if $gsutil; then
+    function wait_for_complete()
+    {
+        local summary now started_at=$(date +%s)
+        while true; do
+            echo 'vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
+            log
+            summary="$(pgrep -laf 'gsutil rsync' || :)"
             echo "${summary}"
-            exit 2
-        fi
-        echo "${summary}"
-        eval "${summary}"
-        [[ $in_progressCount -gt 0 ]] || break
-        sleep 60
-    done
-    log '*** DELETING ***'
-    ./transfer.py "${GCP_PROJECT}" --filter-job-description "${JOB_NAME}" --delete
-    log '*** DONE ***'
-}
+            now=$(date +%s)
+            log "elapsedSeconds: $(( $now - $started_at ))"
+            [[ -n "${summary}" ]] || break
+            sleep 60
+        done
+        log '*** DONE ***'
+    }
+
+    S3_BUCKET=$1
+    GS_BUCKET=$2
+
+    [[ -d gsutil_logs ]] || mkdir gsutil_logs
+
+    function sync()
+    {
+        local upid
+        for upid in $(recent_upids); do
+            gsutil rsync -Cr "${GS_BUCKET}/${upid}/" "${S3_BUCKET}/${upid}/" \
+                   >"gsutil_logs/${1}-${upid}.log" 2>&1 &
+        done
+    }
+else
+    function wait_for_complete()
+    {
+        local in_progressCount summary
+        while true; do
+            echo 'vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv'
+            log
+            in_progressCount=''
+            summary="$(./transfer.py "${GCP_PROJECT}" --filter-transfer-status in_progress --summarize shell)"
+            if [[ $? -ne 0 ]]; then
+                echo "${summary}"
+                exit 2
+            fi
+            echo "${summary}"
+            eval "${summary}"
+            [[ $in_progressCount -gt 0 ]] || break
+            sleep 60
+        done
+        log '*** DELETING ***'
+        ./transfer.py "${GCP_PROJECT}" --filter-job-description "${JOB_NAME}" --delete
+        log '*** DONE ***'
+    }
+
+    function sync()
+    {
+        local args=("${CREATE_ARGS[@]}" --include-prefix $(recent_upids) --description "$1")
+        printf ' %q' "${args[@]}"; echo
+        "${args[@]}"
+    }
+fi
 
 LAST_QUERIED_AT=$(( $(date +%s) - $INTERVAL_SECONDS ))
 function recent_upids()
@@ -67,6 +112,7 @@ function log()
 set -e
 set -o pipefail
 
+log '*** STARTING ***'
 started_at=$(date +%s)
 i=1
 while true; do
@@ -79,9 +125,7 @@ while true; do
         sleep $diff
         log "done"
     fi
-    args=("${CREATE_ARGS[@]}" --include-prefix $(recent_upids) --description "${JOB_NAME}-${i}")
-    printf ' %q' "${args[@]}"; echo
-    "${args[@]}"
+    sync "${JOB_NAME}-${i}"
     started_at=$(date +%s)
     (( ++i ))
 done
