@@ -77,7 +77,7 @@ else
             sleep 60
         done
         log '*** DELETING ***'
-        ./transfer.py "${GCP_PROJECT}" --filter-job-description "${JOB_NAME}" --delete
+        ./transfer.py "${GCP_PROJECT}" --filter-transfer-status success --filter-job-description "${JOB_NAME}" --delete
         log '*** DONE ***'
     }
 
@@ -113,7 +113,7 @@ set -e
 set -o pipefail
 
 log '*** STARTING ***'
-started_at=$(date +%s)
+started_at=0 # start immediately after waiting on any in progress the first time through
 i=1
 while true; do
     wait_for_complete
