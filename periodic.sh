@@ -130,5 +130,6 @@ while true; do
     fi
     sync "${JOB_NAME}-${i}"
     started_at=$(date +%s)
+    sleep 60 # give the job some time to register before waiting
     (( ++i ))
 done
