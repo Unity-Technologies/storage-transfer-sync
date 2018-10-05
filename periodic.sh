@@ -52,8 +52,9 @@ if $gsutil; then
 
     function sync()
     {
-        local upid
-        for upid in $(recent_upids); do
+        local upid upids=($(recent_upids))
+        log "SYNCING ${#upids[@]} UPIDS"
+        for upid in ${upids[*]}; do
             gsutil rsync -Cr "${GS_BUCKET}/${upid}/" "${S3_BUCKET}/${upid}/" \
                    >"gsutil_logs/${1}-${upid}.log" 2>&1 &
         done
@@ -83,7 +84,9 @@ else
 
     function sync()
     {
-        local args=("${CREATE_ARGS[@]}" --include-prefix $(recent_upids) --description "$1")
+        local upids=($(recent_upids))
+        local args=("${CREATE_ARGS[@]}" --include-prefix ${upids[*]} --description "$1")
+        log "SYNCING ${#upids[@]} UPIDS"
         printf ' %q' "${args[@]}"; echo
         "${args[@]}"
     }
