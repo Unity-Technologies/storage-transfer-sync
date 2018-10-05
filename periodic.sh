@@ -52,9 +52,10 @@ if $gsutil; then
 
     function sync()
     {
-        local upid upids=($(recent_upids))
-        log "SYNCING ${#upids[@]} UPIDS"
-        for upid in ${upids[*]}; do
+        local upid
+        recent_upids
+        log "SYNCING ${#RECENT_UPIDS[@]} UPIDS"
+        for upid in ${RECENT_UPIDS[*]}; do
             gsutil rsync -Cr "${GS_BUCKET}/${upid}/" "${S3_BUCKET}/${upid}/" \
                    >"gsutil_logs/${1}-${upid}.log" 2>&1 &
         done
@@ -84,9 +85,9 @@ else
 
     function sync()
     {
-        local upids=($(recent_upids))
-        local args=("${CREATE_ARGS[@]}" --include-prefix ${upids[*]} --description "$1")
-        log "SYNCING ${#upids[@]} UPIDS"
+        recent_upids
+        local args=("${CREATE_ARGS[@]}" --include-prefix ${RECENT_UPIDS[*]} --description "$1")
+        log "SYNCING ${#RECENT_UPIDS[@]} UPIDS"
         printf ' %q' "${args[@]}"; echo
         "${args[@]}"
     }
@@ -98,8 +99,7 @@ function recent_upids()
     local mysql_ts=$(date --date "@$(( $LAST_QUERIED_AT - $OVERLAP_SECONDS ))" +'%Y-%m-%d %H:%M:%S')
     log "selecting upids updated since ${mysql_ts}"
     LAST_QUERIED_AT=$(date +%s)
-    mysql_batch "SELECT project_fk FROM repos WHERE updated_at > \"${mysql_ts}\" LIMIT 1000" | \
-        tr $'\n' ' '
+    RECENT_UPIDS=($(mysql_batch "SELECT project_fk FROM repos WHERE updated_at > \"${mysql_ts}\" LIMIT 1000" | tr $'\n' ' '))
 }
 
 function mysql_batch()
