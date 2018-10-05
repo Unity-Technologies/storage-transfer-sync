@@ -119,7 +119,7 @@ while true; do
     wait_for_complete
     echo '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
     now=$(date +%s)
-    diff=$(( $INTERVAL_SECONDS - ($now - $started_at) ))
+    diff=$(( $INTERVAL_SECONDS - ($now - $LAST_QUERIED_AT) ))
     if [[ $diff -gt 0 ]]; then
         log "Waiting for ${diff} seconds..."
         sleep $diff
